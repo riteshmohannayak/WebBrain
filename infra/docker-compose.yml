@@ -1,0 +1,117 @@
+version: "3.9"
+
+services:
+  # ----------------------------------------------------------
+  # BACKEND (FastAPI)
+  # ----------------------------------------------------------
+  backend:
+    build:
+      context: ../
+      dockerfile: infra/Dockerfile.backend
+    container_name: webbrain_backend
+    command: uvicorn services.backend.app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONPATH=/app
+      - DATABASE_URL=postgresql://postgres:postgres@webbrain_db:5432/webbrain
+      - REDIS_URL=redis://redis:6379/0
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8001
+    volumes:
+      - ../services:/app/services
+    depends_on:
+      - redis
+      - db
+      - chroma
+
+  # ----------------------------------------------------------
+  # CELERY WORKER
+  # ----------------------------------------------------------
+  worker:
+    build:
+      context: ../
+      dockerfile: infra/Dockerfile.backend
+    container_name: webbrain_worker
+    command: celery -A services.backend.app.workers.tasks.celery_app worker --loglevel=info
+    volumes:
+      - ../services:/app/services
+    depends_on:
+      - redis
+    environment:
+      - PYTHONPATH=/app
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://postgres:postgres@webbrain_db:5432/webbrain
+
+  # ----------------------------------------------------------
+  # REDIS (Celery Broker + Result Backend)
+  # ----------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: webbrain_redis
+    ports:
+      - "6379:6379"
+
+  # ----------------------------------------------------------
+  # POSTGRES DATABASE
+  # ----------------------------------------------------------
+  db:
+    image: postgres:15-alpine
+    container_name: webbrain_db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=webbrain
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  # ----------------------------------------------------------
+  # CHROMADB (Vector Database for embeddings)
+  # ----------------------------------------------------------
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: webbrain_chroma
+    ports:
+      - "8001:8000"
+
+  # ----------------------------------------------------------
+  # FRONTEND - STREAMLIT DASHBOARD
+  # ----------------------------------------------------------
+  dashboard:
+    image: python:3.11-slim
+    build:
+      context: ../dashboard
+      dockerfile: Dockerfile.dashboard
+    container_name: dashboard
+    working_dir: /app
+    volumes:
+      - ../webbrain/dashboard:/app
+    command: streamlit run app.py --server.port 8501 --server.address 0.0.0.0
+    ports:
+      - "8501:8501"
+    environment:
+      - API_BASE=http://backend:8000/api/v1
+    depends_on:
+      - backend
+
+  # ----------------------------------------------------------
+  # NGINX (optional — frontend reverse proxy)
+  # ----------------------------------------------------------
+  nginx:
+    image: nginx:latest
+    container_name: webbrain_nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - backend
+      - dashboard
+
+# ----------------------------------------------------------
+# NAMED VOLUMES
+# ----------------------------------------------------------
+volumes:
+  pg_data:

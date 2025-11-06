@@ -1,0 +1,4 @@
+- The ollama is running locally needs to be set up to run on dicker it self
+- set up redis and celery for queuing apis and handling multiple requests at once
+## docker command to run the backedn iside of the container
+---> docker logs -f webbrain_backend
