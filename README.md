@@ -16,8 +16,6 @@ WebBrain is a full-stack GenAI system that scrapes, summarizes, and semantically
 # Tech Stack That I have Used
 
 - Backend — FastAPI app (Python)
-- Worker — Celery worker for async scraping/summarization
-- Redis — message queue
 - Postgres — main database
-- ChromaDB — vector database
-- Nginx — reverse proxy
+- Frontend - StreamLit
+- LLM Model- llama3.2:latest
